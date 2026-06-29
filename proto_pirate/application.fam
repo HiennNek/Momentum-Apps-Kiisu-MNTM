@@ -1,6 +1,6 @@
 App(
     appid="proto_pirate",
-    name="ProtoPirate Kiisu Port",
+    name="ProtoPirate Kiisu",
     apptype=FlipperAppType.EXTERNAL,
     targets=["f7"],
     entry_point="protopirate_app",
