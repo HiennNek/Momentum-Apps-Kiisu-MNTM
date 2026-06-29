@@ -2,7 +2,7 @@
 #include "aut64.h"
 #include "protocols_common.h"
 #include <string.h>
-#include <lib/subghz/subghz_keystore.h>
+#include <storage/storage.h>
 
 #define TAG "VAGProtocol"
 
@@ -55,48 +55,81 @@ static const SubGhzBlockConst subghz_protocol_vag_const = {
 static int8_t protocol_vag_keys_loaded = -1;
 static struct aut64_key protocol_vag_keys[VAG_KEYS_COUNT];
 
+static uint8_t vag_hex_nibble(char c) {
+    if(c >= '0' && c <= '9') return c - '0';
+    if(c >= 'A' && c <= 'F') return c - 'A' + 10;
+    if(c >= 'a' && c <= 'f') return c - 'a' + 10;
+    return 0;
+}
+
 static void protocol_vag_load_keys(const char* file_name) {
     if(protocol_vag_keys_loaded >= 0) {
-        FURI_LOG_I(
-            TAG,
-            "Already loaded %u keys from %s, skipping load",
-            protocol_vag_keys_loaded,
-            file_name);
+        FURI_LOG_I(TAG, "Already loaded %u keys, skipping", protocol_vag_keys_loaded);
         return;
     }
 
     FURI_LOG_I(TAG, "Loading keys from %s", file_name);
-
     protocol_vag_keys_loaded = 0;
 
-    for(uint8_t i = 0; i < VAG_KEYS_COUNT; i++) {
-        uint8_t key_packed[AUT64_PACKED_KEY_SIZE];
+    Storage* storage = furi_record_open(RECORD_STORAGE);
+    File* file = storage_file_alloc(storage);
 
-        if(subghz_keystore_raw_get_data(
-               file_name, i * AUT64_PACKED_KEY_SIZE, key_packed, AUT64_PACKED_KEY_SIZE)) {
-            int rc = aut64_unpack(&protocol_vag_keys[i], key_packed);
-#ifdef AUT64_ENABLE_VALIDATIONS
-            if(rc == AUT64_ERR_INVALID_PACKED) {
-                FURI_LOG_E(TAG, "Invalid key: %u", i);
-            } else if(rc == AUT64_ERR_NULL_POINTER) {
-                FURI_LOG_E(TAG, "Key is NULL: %d", i);
-            }
-            if(rc == AUT64_OK) {
-                protocol_vag_keys_loaded++;
-            } else {
-                break;
-            }
-#else
-            (void)rc;
-            protocol_vag_keys_loaded++;
-#endif
-        } else {
-            FURI_LOG_E(TAG, "Unable to load key %u", i);
+    do {
+        if(!storage_file_open(file, file_name, FSAM_READ, FSOM_OPEN_EXISTING)) {
+            FURI_LOG_E(TAG, "Unable to open file: %s", file_name);
             break;
         }
-    }
 
-    FURI_LOG_I(TAG, "Loaded %u keys", protocol_vag_keys_loaded);
+        uint64_t file_size = storage_file_size(file);
+        if(file_size == 0 || file_size > 4096) break;
+
+        char* buf = malloc(file_size + 1);
+        if(storage_file_read(file, (uint8_t*)buf, file_size) != file_size) {
+            free(buf);
+            break;
+        }
+        buf[file_size] = '\0';
+        storage_file_close(file);
+
+        int key_idx = 0;
+        char* p = buf;
+        while(p && *p && key_idx < VAG_KEYS_COUNT) {
+            char* next = strchr(p, '\n');
+            if(next) *next = '\0';
+
+            size_t len = strlen(p);
+            if(len == AUT64_PACKED_KEY_SIZE * 2) {
+                bool valid = true;
+                for(size_t i = 0; i < len; i++) {
+                    if(!((p[i] >= '0' && p[i] <= '9') ||
+                          (p[i] >= 'A' && p[i] <= 'F') ||
+                          (p[i] >= 'a' && p[i] <= 'f'))) {
+                        valid = false;
+                        break;
+                    }
+                }
+                if(valid) {
+                    uint8_t key_packed[AUT64_PACKED_KEY_SIZE];
+                    for(size_t j = 0; j < AUT64_PACKED_KEY_SIZE; j++) {
+                        key_packed[j] = (vag_hex_nibble(p[j * 2]) << 4) |
+                                        vag_hex_nibble(p[j * 2 + 1]);
+                    }
+                    int rc = aut64_unpack(&protocol_vag_keys[key_idx], key_packed);
+                    (void)rc;
+                    key_idx++;
+                }
+            }
+            p = next ? next + 1 : NULL;
+        }
+
+        free(buf);
+        protocol_vag_keys_loaded = key_idx;
+    } while(0);
+
+    storage_file_free(file);
+    furi_record_close(RECORD_STORAGE);
+
+    FURI_LOG_I(TAG, "Loaded %u VAG keys", protocol_vag_keys_loaded);
 }
 
 static struct aut64_key* protocol_vag_get_key(uint8_t index) {

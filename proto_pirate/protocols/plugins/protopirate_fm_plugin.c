@@ -1,7 +1,6 @@
 #include "../protopirate_protocol_plugins.h"
 #include "../scher_khan.h"
 #include "../kia_v0.h"
-#include "../kia_v2.h"
 #include "../kia_v3_v4.h"
 #include "../kia_v5.h"
 #include "../kia_v6.h"
@@ -16,21 +15,20 @@
 #include "../psa.h"
 
 static const SubGhzProtocol* const protopirate_protocol_registry_fm_items[] = {
-&subghz_protocol_scher_khan,
-&kia_protocol_v0,
-&kia_protocol_v2,
-&kia_protocol_v3_v4,
-&kia_protocol_v5,
-&kia_protocol_v6,
-&ford_protocol_v1,
-&ford_protocol_v2,
-&ford_protocol_v3,
-&honda_static_protocol,
-&land_rover_v0_protocol,
-&mazda_v0_protocol,
-&mitsubishi_v0_protocol,
-&kia_protocol_v7,
-&psa_protocol,
+    &subghz_protocol_scher_khan,
+    &kia_protocol_v0,
+    &kia_protocol_v3_v4,
+    &kia_protocol_v5,
+    &kia_protocol_v6,
+    &ford_protocol_v1,
+    &ford_protocol_v2,
+    &ford_protocol_v3,
+    &honda_static_protocol,
+    &land_rover_v0_protocol,
+    &mazda_v0_protocol,
+    &mitsubishi_v0_protocol,
+    &kia_protocol_v7,
+    &psa_protocol,
 };
 
 static const SubGhzProtocolRegistry protopirate_protocol_registry_fm = {
